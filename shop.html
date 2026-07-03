@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Interactive Cyber Store</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="stars-wrap" id="starsWrap"></div>
+
+<div class="container">
+  <div class="header">
+    <h1 class="title">Explore Dynamic Catalog</h1>
+  </div>
+  
+  <div class="grid" id="shopGrid">
+    <div style="grid-column: 1/-1; text-align: center; color: rgba(255,255,255,0.4);">⚡ Initializing catalog grid...</div>
+  </div>
+</div>
+
+<script>
+// ⚠️ PASTE YOUR DEPLOYED GOOGLE SCRIPT URL HERE
+const adminUrl = "https://script.gooom/macros/s/AKfycbywUwcl7CPB_e4LgTg23lAdZmkydLJ03KKYOXGiYeMpXNuHV1p3OpJNgd6ZrdaIxdceRA/exec";
+
+function loadShopItems() {
+  const grid = document.getElementById("shopGrid");
+  
+  fetch(adminUrl)
+    .then(res => res.json())
+    .then(data => {
+      if(data.length === 0) {
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:#aaa;">No inventory items found.</div>`;
+        return;
+      }
+      
+      grid.innerHTML = "";
+      data.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="img-wrap">
+            ${item.image ? `<img src="${item.image.replace('/upload/', '/upload/w_400,c_scale,q_auto/')}" alt="${item.name}">` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:32px;">📦</div>`}
+          </div>
+          <div class="item-name">${item.name}</div>
+          <div class="item-desc">${item.description || 'No description provided.'}</div>
+          <div class="item-price">₹${item.price}</div>
+        `;
+        grid.appendChild(card);
+      });
+    }).catch(() => {
+      grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:#ff4d4d;">❌ Connection error loading storefront listings.</div>`;
+    });
+}
+
+loadShopItems();
+
+/* Dynamic Starfield Animation Render Engine loop */
+const wrap = document.getElementById('starsWrap');
+for(let i=0; i<75; i++){
+  const s = document.createElement('div');
+  s.className = 'star';
+  s.style.cssText = `left:${Math.random()*100}%; top:${Math.random()*100}%; width:2px; height:2px; --dur:${3+Math.random()*3}s; --delay:-${Math.random()*5}s;`;
+  wrap.appendChild(s);
+}
+</script>
+</body>
+</html>
