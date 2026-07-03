@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin System Terminal</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f3f4f6; color: #1f2937; padding: 20px; display: flex; justify-content: center; }
+    .wrap { width: 100%; max-width: 500px; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    h2 { margin-bottom: 20px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; }
+    input { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    button:disabled { opacity: 0.5; }
+    .prod-row { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; padding: 10px 0; }
+    .del-btn { background: #ef4444; width: auto; padding: 5px 10px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+  <div id="loginView">
+    <h2>🔒 Admin Access Required</h2>
+    <form id="loginForm">
+      <div class="form-group"><label>Shop ID</label><input type="text" id="loginId" required></div>
+      <div class="form-group"><label>Password</label><input type="password" id="loginPwd" required></div>
+      <button type="submit">Unlock System</button>
+    </form>
+  </div>
+
+  <div id="dashboardView" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>📦 Product Deployment</h2>
+      <button onclick="logout()" style="width:auto; padding:6px 12px; background:#4b5563;">Logout</button>
+    </div>
+    
+    <form id="productForm">
+      <input type="hidden" name="image" id="finalImageUrl">
+      <div class="form-group"><label>Product Image File</label><input type="file" id="imageInput" accept="image/*"></div>
+      <div class="form-group"><label>Product Name</label><input type="text" name="name" required></div>
+      <div class="form-group"><label>Description</label><input type="text" name="description" required></div>
+      <div class="form-group"><label>Category</label><input type="text" name="category"></div>
+      <div class="form-group"><label>Price (₹)</label><input type="number" name="price" required></div>
+      <button type="submit" id="submitBtn">Deploy Product</button>
+    </form>
+
+    <h2 style="margin-top:30px;">Active Inventory</h2>
+    <div id="inventoryContainer">Loading...</div>
+  </div>
+</div>
+
+<script>
+// ⚠️ PASTE YOUR DEPLOYED GOOGLE SCRIPT URL HERE
+const adminUrl = "https://script.google.com/macros/s/AKfycAdZmkydLJ03KKYOXGiYeMpXNuHV1p3OpJNgd6ZrdaIxdceRA/exec";
+const CLOUD_NAME = "dxmfd"; 
+
+if(sessionStorage.getItem("isLoggedIn") === "true") showDashboard();
+
+document.getElementById("loginForm").addEventListener("submit", async function(e){
+  e.preventDefault();
+  const btn = this.querySelector("button");
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${adminUrl}?action=login&id=${encodeURIComponent(document.getElementById("loginId").value)}&pwd=${encodeURIComponent(document.getElementById("loginPwd").value)}`);
+    const data = await res.json();
+    if(data.status === "success") {
+      sessionStorage.setItem("isLoggedIn", "true");
+      showDashboard();
+    } else alert("Invalid Credentials");
+  } catch(e) { alert("Server error connection"); }
+  btn.disabled = false;
+});
+
+function showDashboard() {
+  document.getElementById("loginView").style.display = "none";
+  document.getElementById("dashboardView").style.display = "block";
+  fetchInventory();
+}
+
+function logout() { sessionStorage.removeItem("isLoggedIn"); location.reload(); }
+
+document.getElementById("productForm").addEventListener("submit", async function(e){
+  e.preventDefault();
+  const btn = document.getElementById("submitBtn");
+  const file = document.getElementById('imageInput').files[0];
+  btn.disabled = true;
+
+  try {
+    if (file) {
+      btn.textContent = "Requesting Secure Upload Token...";
+      const sigRes = await fetch(`${adminUrl}?action=getSignature`);
+      const sigData = await sigRes.json();
+      
+      btn.textContent = "Uploading Image to Cloudinary...";
+      const cloudData = new FormData();
+      cloudData.append("file", file);
+      cloudData.append("api_key", sigData.apiKey);
+      cloudData.append("timestamp", sigData.timestamp);
+      cloudData.append("signature", sigData.signature);
+      cloudData.append("upload_preset", sigData.uploadPreset);
+
+      const resCloud = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: "POST", body: cloudData });
+      const dataCloud = await resCloud.json();
+      if(dataCloud.secure_url) document.getElementById("finalImageUrl").value = dataCloud.secure_url;
+    }
+    
+    btn.textContent = "Saving to Spreadsheet...";
+    await fetch(adminUrl, { method: "POST", body: new FormData(this) });
+    alert("Product saved successfully!");
+    this.reset();
+    fetchInventory();
+  } catch(err) { alert("Error deploying product: " + err.message); }
+  btn.innerHTML = "Deploy Product";
+  btn.disabled = false;
+});
+
+function fetchInventory(){
+  const container = document.getElementById("inventoryContainer");
+  fetch(adminUrl).then(res => res.json()).then(data => {
+    container.innerHTML = data.length === 0 ? "Empty" : "";
+    data.forEach((p, i) => {
+      container.innerHTML += `
+        <div class="prod-row">
+          <span><strong>${p.name}</strong> - ₹${p.price}</span>
+          <button class="del-btn" onclick="deleteItem(${i + 2})">Delete</button>
+        </div>`;
+    });
+  });
+}
+
+function deleteItem(row){
+  if(!confirm("Delete?")) return;
+  fetch(`${adminUrl}?deleteRow=${row}`).then(() => fetchInventory());
+}
+</script>
+</body>
+</html>
